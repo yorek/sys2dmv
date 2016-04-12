@@ -17,7 +17,7 @@
 --
 -- 2.1				Added information regarding the data space in which LOB data is stored
 -- 2.2				Added "space_used" and "alloc_unit_type_desc" columns
--- 2.3				Minimum version required: SQL Server 2008
+-- 2.3				Minimum version required: SQL Server 2008. Added information on partition boundaries
 ------------------------------------------------------------------------
 
 IF NOT EXISTS(SELECT * FROM sys.schemas s WHERE s.[name] = 'sys2')
@@ -32,7 +32,7 @@ CREATE FUNCTION sys2.objects_data_spaces(@tablename sysname)
 RETURNS TABLE 
 AS
 RETURN
-SELECT TOP (2147483647)
+SELECT TOP 16777216
 	o.[object_id],
 	[schema_name] = s.[name],
 	[object_name] = o.[name],
@@ -89,5 +89,4 @@ AND
 	o.[type] IN ('U', 'V')
 ORDER BY	
 	o.[name]
-;
 GO
