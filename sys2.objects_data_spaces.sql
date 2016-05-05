@@ -1,7 +1,7 @@
 ------------------------------------------------------------------------
 -- Script:          sys2.objects_data_spaces.sql
--- Version:         2.4
--- Release Date:    2016-04-13
+-- Version:         2.5
+-- Release Date:    2016-05-05
 -- Author:          Davide Mauri
 -- Credits:         -
 -- License:         MIT License (MIT)
@@ -17,10 +17,11 @@
 ------------------------------------------------------------------------
 -- Version History
 --
--- 2.1              Added information regarding the data space in which LOB data is stored
--- 2.2              Added "space_used" and "alloc_unit_type_desc" columns
--- 2.3              Minimum version required: SQL Server 2008. Added information on partition boundaries
--- 2.4				Added check for correct SQL Server version and for SQLCMD usage
+-- 2.1  Added information regarding the data space in which LOB data is stored
+-- 2.2  Added "space_used" and "alloc_unit_type_desc" columns
+-- 2.3  Minimum version required: SQL Server 2008. Added information on partition boundaries
+-- 2.4	Added check for correct SQL Server version and for SQLCMD usage
+-- 2.5	Added range description		
 ------------------------------------------------------------------------
 :setvar SQLCMDMode "On"
 go
@@ -53,8 +54,10 @@ create function [sys2].[objects_data_spaces] ( @tablename sysname )
 returns table
 as
 return
-    select top ( 2147483647 )
-            [o].[object_id] ,
+	with cte as 
+	(    
+		select
+			[o].[object_id] ,
             [schema_name] = [s].[name] ,
             [object_name] = [o].[name] ,
             [object_type] = [o].[type] ,
@@ -112,6 +115,24 @@ return
 		( [p].[object_id] = object_id(@tablename) or @tablename is null )
 	and 
 		[o].[type] in ( 'U', 'V' )
-    order by 
-		[o].[name];
+	)
+	select top ( 2147483647 )
+		*,
+		[range] = 
+				case 
+					when c.[range_type] = 'LEFT' and c.[partition_number] = 1 then '<= ' + cast([boundary_value] as varchar(100))
+					when c.[range_type] = 'LEFT' and c.[partition_number] != c.[fanout] then '> ' + cast(lag([boundary_value]) over (partition by [object_id] order by [partition_number]) as varchar(100)) + ' and <= ' + cast([boundary_value] as varchar(100))
+					when c.[range_type] = 'LEFT' and c.[partition_number] = c.[fanout] then '> ' + cast(lag([boundary_value]) over (partition by [object_id] order by [partition_number]) as varchar(100))
+					when c.[range_type] = 'RIGHT' and c.[partition_number] = 1 then '< ' + cast([boundary_value] as varchar(100))
+					when c.[range_type] = 'RIGHT' and c.[partition_number] != c.[fanout] then '>= ' + cast(lag([boundary_value]) over (partition by [object_id] order by [partition_number]) as varchar(100)) + ' and < ' + cast([boundary_value] as varchar(100))
+					when c.[range_type] = 'RIGHT' and c.[partition_number] = c.[fanout] then '>= ' + cast(lag([boundary_value]) over (partition by [object_id] order by [partition_number]) as varchar(100))
+				else
+					null
+				end
+	from
+		cte c
+	order by
+		[object_name]
+;
 go
+
